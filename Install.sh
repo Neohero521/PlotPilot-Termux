@@ -213,28 +213,34 @@ install_python_deps() {
     # 激活虚拟环境
     source .venv/bin/activate
 
-    # 升级 pip、setuptools、wheel (避免编译问题)
+    # 升级 pip、setuptools、wheel
     pip install --upgrade pip setuptools wheel -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-    # 先安装编译工具相关的 Python 包
-    pip install cython maturin -i https://pypi.tuna.tsinghua.edu.cn/simple 2>/dev/null || true
-
-    # 设置编译环境变量 (用于 Termux)
+    # Termux 特殊处理：使用预编译包，避免编译
     if [ "$IS_TERMUX" = true ]; then
-        export CARGO_BUILD_TARGET="aarch64-linux-android"
-        export CC="clang"
-        export CXX="clang++"
-        export AR="llvm-ar"
-    fi
-
-    # 安装依赖 (使用预编译包优先)
-    pip install --only-binary :all: -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple 2>/dev/null || {
-        log_warn "部分包需要编译安装，尝试从源码安装..."
-        pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --no-build-isolation || {
-            log_warn "部分依赖安装失败，尝试单独安装关键依赖..."
-            pip install fastapi uvicorn sqlalchemy python-multipart python-jose -i https://pypi.tuna.tsinghua.edu.cn/simple
+        log_info "Termux 环境，使用预编译包安装策略..."
+        
+        # 先安装 pydantic v1 (没有 pydantic-core，纯 Python)
+        pip install 'pydantic<2' -i https://pypi.tuna.tsinghua.edu.cn/simple
+        
+        # 安装其他关键依赖 (优先使用纯 Python 版本)
+        pip install fastapi uvicorn sqlalchemy python-multipart python-jose passlib -i https://pypi.tuna.tsinghua.edu.cn/simple || {
+            log_warn "部分依赖安装失败"
         }
-    }
+        
+        # 尝试安装 requirements.txt 中的其他依赖 (跳过已安装的)
+        if [ -f "requirements.txt" ]; then
+            log_info "尝试安装其他依赖..."
+            grep -v "^pydantic" requirements.txt | pip install -r /dev/stdin -i https://pypi.tuna.tsinghua.edu.cn/simple 2>/dev/null || {
+                log_warn "部分依赖安装失败，但核心功能应该可用"
+            }
+        fi
+    else
+        # 普通 Linux 环境正常安装
+        pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple || {
+            log_warn "部分依赖安装失败"
+        }
+    fi
 
     # 安装 faiss-cpu（如果失败则跳过）
     pip install faiss-cpu -i https://pypi.tuna.tsinghua.edu.cn/simple 2>/dev/null || {
