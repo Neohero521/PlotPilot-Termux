@@ -127,13 +127,19 @@ install_dependencies() {
         fi
     done
 
-    # 安装 Python pip
+    # 安装 Python pip (Termux 不需要，pkg 已经提供)
     if ! command -v pip &> /dev/null; then
-        python -m ensurepip --upgrade
+        if [ "$IS_TERMUX" = true ]; then
+            pkg install -y python-pip
+        else
+            python -m ensurepip --upgrade
+        fi
     fi
 
-    # 升级 pip
-    pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
+    # 升级 pip (排除 Termux，避免与系统包冲突)
+    if [ "$IS_TERMUX" != true ]; then
+        pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
+    fi
 
     log_success "核心依赖安装完成"
 }
