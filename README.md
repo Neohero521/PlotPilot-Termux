@@ -65,7 +65,7 @@
 打开 Termux，粘贴并执行以下命令：
 
 ```bash
-curl -O https://raw.githubusercontent.com/your-username/PlotPilot-Termux/main/Install.sh && bash Install.sh
+curl -O https://raw.githubusercontent.com/kaku5/PlotPilot-Termux/main/Install.sh && bash Install.sh
 ```
 
 安装过程自动完成以下操作：

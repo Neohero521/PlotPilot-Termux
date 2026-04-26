@@ -585,7 +585,7 @@ script_management() {
 
     case $script_choice in
         1)
-            curl -O https://raw.githubusercontent.com/your-username/PlotPilot-Termux/main/Install.sh && bash Install.sh
+            curl -O https://raw.githubusercontent.com/kaku5/PlotPilot-Termux/main/Install.sh && bash Install.sh
             ;;
         2)
             echo "脚本版本: $MENU_VERSION"
