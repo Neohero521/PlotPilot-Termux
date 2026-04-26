@@ -220,21 +220,38 @@ install_python_deps() {
     if [ "$IS_TERMUX" = true ]; then
         log_info "Termux 环境，使用预编译包安装策略..."
         
+        # 设置环境变量强制使用预编译包
+        export PIP_ONLY_BINARY=:all:
+        export PIP_NO_BUILD_ISOLATION=1
+        export PIP_NO_CLEAN=1
+        
         # 先安装 pydantic v1 (没有 pydantic-core，纯 Python)
-        pip install 'pydantic<2' -i https://pypi.tuna.tsinghua.edu.cn/simple
+        log_info "安装 pydantic v1 (避免编译)..."
+        pip install 'pydantic<2' --force-reinstall -i https://pypi.tuna.tsinghua.edu.cn/simple
         
         # 安装其他关键依赖 (优先使用纯 Python 版本)
-        pip install fastapi uvicorn sqlalchemy python-multipart python-jose passlib -i https://pypi.tuna.tsinghua.edu.cn/simple || {
-            log_warn "部分依赖安装失败"
+        log_info "安装 FastAPI 等核心依赖..."
+        pip install fastapi uvicorn 'uvicorn[standard]' sqlalchemy python-multipart python-jose passlib python-dotenv -i https://pypi.tuna.tsinghua.edu.cn/simple --only-binary :all: 2>/dev/null || {
+            log_warn "部分依赖需要从源码安装，这可能需要较长时间..."
+            pip install fastapi uvicorn sqlalchemy python-multipart python-jose passlib python-dotenv -i https://pypi.tuna.tsinghua.edu.cn/simple --no-build-isolation
         }
         
-        # 尝试安装 requirements.txt 中的其他依赖 (跳过已安装的)
+        # 尝试安装 requirements.txt 中的其他依赖
         if [ -f "requirements.txt" ]; then
-            log_info "尝试安装其他依赖..."
-            grep -v "^pydantic" requirements.txt | pip install -r /dev/stdin -i https://pypi.tuna.tsinghua.edu.cn/simple 2>/dev/null || {
-                log_warn "部分依赖安装失败，但核心功能应该可用"
+            log_info "安装 requirements.txt 中的其他依赖..."
+            # 跳过 pydantic 相关，因为已经安装了 v1
+            grep -v -E "^(pydantic|fastapi|uvicorn|sqlalchemy|python-multipart|python-jose|passlib)" requirements.txt > /tmp/requirements_filtered.txt
+            pip install -r /tmp/requirements_filtered.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --only-binary :all: 2>/dev/null || {
+                log_warn "部分依赖安装失败，尝试允许编译安装..."
+                pip install -r /tmp/requirements_filtered.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --no-build-isolation 2>/dev/null || {
+                    log_warn "部分依赖安装失败，但核心功能应该可用"
+                }
             }
         fi
+        
+        # 取消环境变量
+        unset PIP_ONLY_BINARY
+        unset PIP_NO_BUILD_ISOLATION
     else
         # 普通 Linux 环境正常安装
         pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple || {
