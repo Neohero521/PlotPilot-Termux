@@ -119,7 +119,7 @@ update_packages() {
 install_dependencies() {
     log_info "正在安装核心依赖..."
 
-    local deps="git curl wget python nodejs-lts sqlite tmux"
+    local deps="git curl wget python nodejs-lts sqlite tmux binutils python clang lld pkg-config rust"
 
     for dep in $deps; do
         if ! command -v $(echo $dep | cut -d'-' -f1) &> /dev/null; then
@@ -213,10 +213,27 @@ install_python_deps() {
     # 激活虚拟环境
     source .venv/bin/activate
 
-    # 安装依赖
-    pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple || {
-        log_warn "部分依赖安装失败，尝试单独安装关键依赖..."
-        pip install fastapi uvicorn sqlalchemy python-multipart python-jose -i https://pypi.tuna.tsinghua.edu.cn/simple
+    # 升级 pip、setuptools、wheel (避免编译问题)
+    pip install --upgrade pip setuptools wheel -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+    # 先安装编译工具相关的 Python 包
+    pip install cython maturin -i https://pypi.tuna.tsinghua.edu.cn/simple 2>/dev/null || true
+
+    # 设置编译环境变量 (用于 Termux)
+    if [ "$IS_TERMUX" = true ]; then
+        export CARGO_BUILD_TARGET="aarch64-linux-android"
+        export CC="clang"
+        export CXX="clang++"
+        export AR="llvm-ar"
+    fi
+
+    # 安装依赖 (使用预编译包优先)
+    pip install --only-binary :all: -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple 2>/dev/null || {
+        log_warn "部分包需要编译安装，尝试从源码安装..."
+        pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --no-build-isolation || {
+            log_warn "部分依赖安装失败，尝试单独安装关键依赖..."
+            pip install fastapi uvicorn sqlalchemy python-multipart python-jose -i https://pypi.tuna.tsinghua.edu.cn/simple
+        }
     }
 
     # 安装 faiss-cpu（如果失败则跳过）
