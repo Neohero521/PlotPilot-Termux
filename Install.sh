@@ -20,6 +20,12 @@ PLOTPILOT_REPO="https://github.com/shenminglinyi/PlotPilot.git"
 INSTALL_DIR="$HOME/PlotPilot"
 MENU_SCRIPT="$HOME/Menu.sh"
 
+# 检测 Termux 环境
+IS_TERMUX=false
+if [ -n "$TERMUX_VERSION" ] || [ -d "/data/data/com.termux/files" ]; then
+    IS_TERMUX=true
+fi
+
 # 日志函数
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -127,17 +133,19 @@ install_dependencies() {
         fi
     done
 
-    # 安装 Python pip (Termux 不需要，pkg 已经提供)
+    # 安装 Python pip (Termux 使用系统提供的 pip)
     if ! command -v pip &> /dev/null; then
         if [ "$IS_TERMUX" = true ]; then
-            pkg install -y python-pip
+            log_info "Termux 环境，跳过 pip 安装 (使用系统自带)"
         else
             python -m ensurepip --upgrade
         fi
     fi
 
     # 升级 pip (排除 Termux，避免与系统包冲突)
-    if [ "$IS_TERMUX" != true ]; then
+    if [ "$IS_TERMUX" = true ]; then
+        log_info "Termux 环境，跳过 pip 升级"
+    else
         pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
     fi
 
