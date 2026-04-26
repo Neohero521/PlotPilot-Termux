@@ -222,36 +222,39 @@ install_python_deps() {
         
         # 设置环境变量强制使用预编译包
         export PIP_ONLY_BINARY=:all:
-        export PIP_NO_BUILD_ISOLATION=1
-        export PIP_NO_CLEAN=1
         
-        # 先安装 pydantic v1 (没有 pydantic-core，纯 Python)
+        # 先安装 pydantic v1 (强制，不安装依赖，避免被升级)
         log_info "安装 pydantic v1 (避免编译)..."
-        pip install 'pydantic<2' --force-reinstall -i https://pypi.tuna.tsinghua.edu.cn/simple
+        pip install 'pydantic<2' --force-reinstall --no-deps -i https://pypi.tuna.tsinghua.edu.cn/simple
         
-        # 安装其他关键依赖 (优先使用纯 Python 版本)
-        log_info "安装 FastAPI 等核心依赖..."
-        pip install fastapi uvicorn 'uvicorn[standard]' sqlalchemy python-multipart python-jose passlib python-dotenv -i https://pypi.tuna.tsinghua.edu.cn/simple --only-binary :all: 2>/dev/null || {
-            log_warn "部分依赖需要从源码安装，这可能需要较长时间..."
-            pip install fastapi uvicorn sqlalchemy python-multipart python-jose passlib python-dotenv -i https://pypi.tuna.tsinghua.edu.cn/simple --no-build-isolation
+        # 安装 pydantic 的依赖 (纯 Python)
+        pip install 'typing-extensions>=4.6.1' 'annotated-types>=0.4.0' -i https://pypi.tuna.tsinghua.edu.cn/simple
+        
+        # 安装其他关键依赖 (使用兼容 pydantic v1 的版本)
+        log_info "安装 FastAPI 等核心依赖 (兼容 pydantic v1)..."
+        pip install 'fastapi<0.100' 'uvicorn[standard]' sqlalchemy python-multipart 'python-jose[cryptography]' passlib python-dotenv email-validator -i https://pypi.tuna.tsinghua.edu.cn/simple --only-binary :all: 2>/dev/null || {
+            log_warn "部分依赖需要从源码安装..."
+            pip install 'fastapi<0.100' 'uvicorn[standard]' sqlalchemy python-multipart 'python-jose[cryptography]' passlib python-dotenv email-validator -i https://pypi.tuna.tsinghua.edu.cn/simple
         }
         
-        # 尝试安装 requirements.txt 中的其他依赖
+        # 安装其他常用依赖
+        log_info "安装其他常用依赖..."
+        pip install requests aiohttp aiofiles httpx jinja2 pyyaml click colorama tqdm -i https://pypi.tuna.tsinghua.edu.cn/simple 2>/dev/null || true
+        
+        # 尝试安装 requirements.txt 中的其他依赖 (跳过所有 pydantic 相关)
         if [ -f "requirements.txt" ]; then
             log_info "安装 requirements.txt 中的其他依赖..."
             # 跳过 pydantic 相关，因为已经安装了 v1
-            grep -v -E "^(pydantic|fastapi|uvicorn|sqlalchemy|python-multipart|python-jose|passlib)" requirements.txt > /tmp/requirements_filtered.txt
-            pip install -r /tmp/requirements_filtered.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --only-binary :all: 2>/dev/null || {
-                log_warn "部分依赖安装失败，尝试允许编译安装..."
-                pip install -r /tmp/requirements_filtered.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --no-build-isolation 2>/dev/null || {
+            grep -v -iE "^(pydantic|fastapi|uvicorn|sqlalchemy|python-multipart|python-jose|passlib|typing-extensions|annotated-types)" requirements.txt > /tmp/requirements_filtered.txt 2>/dev/null
+            if [ -s /tmp/requirements_filtered.txt ]; then
+                pip install -r /tmp/requirements_filtered.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --only-binary :all: 2>/dev/null || {
                     log_warn "部分依赖安装失败，但核心功能应该可用"
                 }
-            }
+            fi
         fi
         
         # 取消环境变量
         unset PIP_ONLY_BINARY
-        unset PIP_NO_BUILD_ISOLATION
     else
         # 普通 Linux 环境正常安装
         pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple || {
